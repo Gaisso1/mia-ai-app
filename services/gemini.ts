@@ -1,22 +1,34 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { RidingPace } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
-export const getRouteSuggestions = async (location: string, pace: RidingPace) => {
+export const getRouteSuggestions = async (prompt: string, pace?: RidingPace) => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Suggerisci un itinerario motociclistico dettagliato partendo da ${location} con un ritmo di guida ${pace}. Includi punti di interesse e strade panoramiche. Rispondi in italiano con un tono entusiasta per motociclisti.`,
+      contents: `Agisci come un esperto motociclista italiano che conosce ogni curva d'Italia. 
+        Analizza questa richiesta e il profilo utente: ${prompt}.
+        Il ritmo preferito è: ${pace || 'non specificato'}.
+        
+        Rispondi con un itinerario dettagliato includendo:
+        1. Nome dell'itinerario e zone attraversate.
+        2. Strade specifiche (es. SS45, SP24) famose per le curve.
+        3. Punti di sosta consigliati per foto o ristoro.
+        4. Un consiglio tecnico sulla guida basato sulla zona.
+        
+        Usa un tono carico, tecnico ma amichevole. Usa emoji. Formatta il testo in modo leggibile con paragrafi.`,
       config: {
         temperature: 0.8,
+        topP: 0.95,
+        topK: 40,
       }
     });
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Non sono riuscito a generare un itinerario al momento. Riprova più tardi.";
+    return "Ops! Ho perso il segnale GPS nel tunnel. Riprova tra un momento, biker!";
   }
 };
 
@@ -24,7 +36,9 @@ export const generateRideDescription = async (title: string, start: string, dest
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Genera una descrizione lunga e coinvolgente per un giro in moto intitolato "${title}". Punto di partenza: ${start}. Destinazione: ${destination}. Enfatizza le curve, il panorama e il piacere di guidare in compagnia.`,
+      contents: `Scrivi una descrizione epica e coinvolgente (max 100 parole) per un giro in moto: "${title}". 
+        Da ${start} verso ${destination}. 
+        Metti enfasi sulla libertà, il sound del motore e le curve. Solo testo in italiano.`,
       config: {
         temperature: 0.7,
       }
@@ -32,6 +46,6 @@ export const generateRideDescription = async (title: string, start: string, dest
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Descrizione non disponibile.";
+    return "Descrizione generata dall'AI non disponibile.";
   }
 };
