@@ -13,15 +13,16 @@ import { Ride, GeoFilter, RidingPace, Comment, User } from './types';
 type Tab = 'active' | 'my-rides' | 'community';
 
 const App: React.FC = () => {
-  // Caricamento iniziale sicuro da LocalStorage per l'utente
+  // 1. Caricamento utente (solo il profilo attivo)
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('crew_user_profile');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Caricamento iniziale sicuro da LocalStorage per i giri
+  // 2. Caricamento database Giri (condiviso tra tutti gli utenti nel browser)
   const [rides, setRides] = useState<Ride[]>(() => {
     const saved = localStorage.getItem('crew_rides_db');
+    // Se non ci sono giri salvati, carica i mock iniziali
     return saved ? JSON.parse(saved) : MOCK_RIDES;
   });
 
@@ -30,15 +31,16 @@ const App: React.FC = () => {
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('active');
 
-  // Effetto per segnalare la fine dell'inizializzazione
   useEffect(() => {
     setIsInitializing(false);
   }, []);
 
-  // Sincronizzazione automatica dei giri su LocalStorage ad ogni modifica
+  // 3. Sincronizzazione persistente dei giri
   useEffect(() => {
-    localStorage.setItem('crew_rides_db', JSON.stringify(rides));
-  }, [rides]);
+    if (!isInitializing) {
+      localStorage.setItem('crew_rides_db', JSON.stringify(rides));
+    }
+  }, [rides, isInitializing]);
 
   const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
   const [geoFilter, setGeoFilter] = useState<GeoFilter>({
@@ -51,6 +53,7 @@ const App: React.FC = () => {
   const filteredRides = useMemo(() => {
     let list = rides;
     
+    // Filtro per tab: 'Giri Attivi' mostra TUTTO, 'I Miei Giri' filtra per l'utente loggato
     if (activeTab === 'my-rides' && user) {
       list = rides.filter(r => 
         r.organizer.id === user.id || r.participants.some(p => p.id === user.id)
@@ -123,6 +126,20 @@ const App: React.FC = () => {
     setSelectedRideId(newRide.id);
   };
 
+  const handleLogout = () => {
+    if (confirm("Vuoi cambiare utente? I giri salvati rimarranno nel database del browser.")) {
+      localStorage.removeItem('crew_user_profile');
+      window.location.reload();
+    }
+  };
+
+  const handleResetDatabase = () => {
+    if (confirm("ATTENZIONE: Questo cancellerà TUTTI i giri creati e resetterà l'app ai dati iniziali. Procedere?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
   if (isInitializing) return null;
 
   if (!user) {
@@ -157,7 +174,13 @@ const App: React.FC = () => {
               <p className="text-xs font-bold text-white uppercase">{user.name}</p>
               <p className="text-[10px] text-orange-500 font-medium italic">{user.bike || 'Moto Biker'}</p>
             </div>
-            <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-slate-700 shadow-xl" alt="Avatar" />
+            <img 
+              src={user.avatar} 
+              onClick={handleLogout}
+              className="w-10 h-10 rounded-full border-2 border-slate-700 shadow-xl cursor-pointer hover:border-orange-500 transition-all" 
+              alt="Avatar - Clicca per Logout" 
+              title="Clicca per Logout"
+            />
           </div>
         </div>
       </header>
@@ -262,11 +285,20 @@ const App: React.FC = () => {
       </main>
 
       {/* Informativa sul salvataggio locale */}
-      <footer className="max-w-7xl mx-auto px-4 py-4 text-center border-t border-slate-900 text-[10px] text-slate-700 font-medium uppercase tracking-widest mb-20 md:mb-4">
-        I dati sono salvati localmente sul tuo browser per questa anteprima.
+      <footer className="max-w-7xl mx-auto px-4 py-8 flex flex-col items-center border-t border-slate-900 space-y-4">
+        <p className="text-[10px] text-slate-700 font-medium uppercase tracking-widest text-center">
+          Anteprima: i dati sono salvati nel browser. 
+          Un giro creato da "Mike" sarà visibile a "Gino" se usano lo stesso browser.
+        </p>
+        <button 
+          onClick={handleResetDatabase}
+          className="text-[9px] text-red-900/40 hover:text-red-600 font-bold uppercase tracking-widest transition-colors"
+        >
+          Reset Totale App
+        </button>
       </footer>
 
-      {/* Mobile Bottom Navigation - Z-INDEX CORRETTO PER MOBILE */}
+      {/* Mobile Bottom Navigation */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 px-6 py-3 flex justify-between items-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
         <button onClick={() => setActiveTab('active')} className={`flex flex-col items-center space-y-1 ${activeTab === 'active' ? 'text-orange-500' : 'text-slate-500'}`}>
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A2 2 0 013 15.382V6.618a2 2 0 011.553-1.944l6-1.5a2 2 0 01.894 0l6 1.5a2 2 0 011.553 1.944v8.764a2 2 0 01-1.553 1.944L11 20z" /></svg>
@@ -287,15 +319,15 @@ const App: React.FC = () => {
           <span className="text-[10px] font-bold uppercase">Crew</span>
         </button>
         <button 
-          onClick={() => { if(confirm("Resettare il profilo?")) { localStorage.clear(); window.location.reload(); } }}
+          onClick={handleLogout}
           className="flex flex-col items-center space-y-1 text-slate-500"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-          <span className="text-[10px] font-bold uppercase">Logout</span>
+          <span className="text-[10px] font-bold uppercase">Cambia</span>
         </button>
       </div>
 
-      {/* Desktop AI Assistant Button (Floating) */}
+      {/* Desktop AI Assistant Button */}
       <button 
         onClick={() => setIsAIModalOpen(true)}
         className="hidden lg:flex fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full shadow-[0_10px_40px_rgba(249,115,22,0.4)] items-center justify-center hover:scale-110 transition-all active:scale-95 z-40 group"
@@ -303,9 +335,6 @@ const App: React.FC = () => {
         <svg className="w-9 h-9 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
-        <span className="absolute right-full mr-4 bg-slate-900 text-white text-[10px] font-bold uppercase px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-slate-700 pointer-events-none shadow-2xl">
-          Chiedi un percorso all'AI
-        </span>
       </button>
 
       {/* Detail Overlay */}
